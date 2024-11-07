@@ -1,0 +1,170 @@
+    .data
+msg_boas_vindas: .ascii "Bem-vindo ao Blackjack!\n\0"
+msg_opcao_jogar: .ascii "Deseja iniciar o jogo? (1 - Sim, 2 - Não): \0"
+msg_jogador_recebe: .ascii "O jogador recebe: \0"
+msg_dealer_revela: .ascii "O dealer revela: \0"
+msg_opcao_jogada: .ascii "O que deseja fazer? (1 - Hit, 2 - Stand): \0"
+msg_vitoria_jogador: .ascii "Voce venceu!\n\0"
+msg_vitoria_dealer: .ascii "O dealer venceu!\n\0"
+msg_empate: .ascii "Empate!\n\0"
+msg_deseja_jogar_novamente: .ascii "Deseja jogar novamente? (1 - Sim, 2 - Não): \0"
+
+    .text
+    .globl main
+
+main:
+    # Mensagem de boas-vindas
+    li a7, 4                   # syscall para imprimir string
+    la a0, msg_boas_vindas
+    ecall
+
+    # Pergunta ao jogador se deseja iniciar
+    la a0, msg_opcao_jogar
+    ecall
+
+    # Lê opção do jogador
+    li a7, 5                   # syscall para ler inteiro
+    ecall
+    li t0, 1                   # se for 1, inicia o jogo
+    beq a0, t0, iniciar_jogo
+    j fim                      # se não for 1, encerra
+
+iniciar_jogo:
+    # Inicializa a mão do jogador e do dealer
+    jal distribuir_cartas_jogador
+    jal distribuir_cartas_dealer
+    jal mostrar_estado
+
+jogada_jogador:
+    # Opção de jogar
+    la a0, msg_opcao_jogada
+    li a7, 4                   # syscall para imprimir string
+    ecall
+
+    # Lê opção do jogador
+    li a7, 5                   # syscall para ler inteiro
+    ecall
+    li t0, 1
+    beq a0, t0, hit_jogador
+    j stand_jogador
+
+hit_jogador:
+    jal distribuir_carta_jogador
+    jal mostrar_estado
+    j jogada_jogador           # volta para opção de jogar
+
+stand_jogador:
+    jal jogada_dealer
+    jal determinar_vencedor
+    j fim_jogo                 # exibe vencedor e pergunta sobre nova partida
+
+fim_jogo:
+    la a0, msg_deseja_jogar_novamente
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    li a7, 5                   # lê opção de nova partida
+    ecall
+    li t0, 1
+    beq a0, t0, iniciar_jogo
+    j fim                      # termina se não for 1
+
+distribuir_cartas_jogador:
+    # Função para distribuir duas cartas iniciais ao jogador
+    jal gerar_carta
+    mv t1, a0                  # primeira carta
+    jal gerar_carta
+    add t1, t1, a0             # soma das cartas do jogador
+    ret
+
+distribuir_cartas_dealer:
+    # Função para distribuir duas cartas ao dealer
+    jal gerar_carta
+    mv t2, a0                  # primeira carta
+    jal gerar_carta
+    add t2, t2, a0             # soma das cartas do dealer
+    ret
+
+distribuir_carta_jogador:
+    jal gerar_carta
+    add t1, t1, a0             # adiciona carta ao total do jogador
+    ret
+
+gerar_carta:
+    # Gera uma carta aleatória de 1 a 13
+    li a0, 13                  # define limite superior positivo (13)
+    li a7, 42                  # syscall para número aleatório
+
+    # Verifica se a0 é maior que zero, garante limite correto
+    bgtz a0, chamar_syscall_aleatorio  
+    li a0, 13                  # força a0 para 13 se estiver incorreto
+
+chamar_syscall_aleatorio:
+    ecall                      # chama o syscall de número aleatório
+    addi a0, a0, 1             # ajusta para range 1-13
+    ret
+
+mostrar_estado:
+    # Função para exibir a mão atual do jogador e a carta visível do dealer
+    la a0, msg_jogador_recebe
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    mv a0, t1
+    li a7, 1                   # syscall para imprimir inteiro
+    ecall                      # imprime valor da mão do jogador
+
+    la a0, msg_dealer_revela
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    mv a0, t2
+    li a7, 1                   # syscall para imprimir inteiro
+    ecall                      # imprime valor visível do dealer
+    ret
+
+jogada_dealer:
+    # Função para jogada do dealer (dealer "bate" até atingir 17)
+    li t3, 17
+jogada_dealer_loop:
+    blt t2, t3, hit_dealer     # dealer "bate" até 17 ou mais
+    j fim_jogada_dealer
+
+hit_dealer:
+    jal gerar_carta
+    add t2, t2, a0
+    j jogada_dealer_loop
+
+fim_jogada_dealer:
+    ret
+
+determinar_vencedor:
+    # Verifica as condições de vitória
+    li t3, 21
+    bgt t1, t3, dealer_vence   # jogador estourou
+    bgt t2, t3, jogador_vence  # dealer estourou
+
+    # Se ambos estiverem abaixo de 21, vence quem tiver maior valor
+    blt t1, t2, dealer_vence
+    bgt t1, t2, jogador_vence
+    j empate                   # caso contrário, é empate
+
+jogador_vence:
+    la a0, msg_vitoria_jogador
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    ret
+
+dealer_vence:
+    la a0, msg_vitoria_dealer
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    ret
+
+empate:
+    la a0, msg_empate
+    li a7, 4                   # syscall para imprimir string
+    ecall
+    ret
+
+fim:
+    # Encerra o programa
+    li a7, 10
+    ecall
